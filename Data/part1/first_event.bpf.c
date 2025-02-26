@@ -10,28 +10,18 @@ struct {
     __uint(value_size, sizeof(u32));
 } events SEC(".maps");
 
-struct trace_event_raw_perf_event {
-    uint32_t event_id;
-    uint64_t value;
-};
-
-// 跟踪 CPU 性能事件：RUN INST CMPL
-SEC("tracepoint/perf/perf_event")
-int trace_perf_event(struct trace_event_raw_perf_event *ctx) {
+SEC("perf_event")
+int trace_perf_event(struct bpf_perf_event_data *ctx) {
     struct event_t event = {};
+    __u32 cpu = bpf_get_smp_processor_id();
 
-    // 通过 BPF_CORE_READ 获取每个性能事件的计数值
-    if (ctx->event_id == 0x003) { // RUN INST CMPL
-        event.run_inst_cmpl = BPF_CORE_READ(ctx, value);
-    } else if (ctx->event_id == 0x008) { // RUN CYC
-        event.run_cyc = BPF_CORE_READ(ctx, value);
-    } else if (ctx->event_id == 0x001) { // L1 ICACHE MISS
-        event.l1_icache_miss = BPF_CORE_READ(ctx, value);
-    } else if (ctx->event_id == 0x011) { // LD MISS L1
-        event.ld_miss_l1 = BPF_CORE_READ(ctx, value);
-    }
+    // 读取所有四个计数器
+    event.run_inst_cmpl = bpf_perf_event_read(&events, cpu);
+    event.run_cyc = bpf_perf_event_read(&events, cpu);
+    event.l1_icache_miss = bpf_perf_event_read(&events, cpu);
+    event.ld_miss_l1 = bpf_perf_event_read(&events, cpu);
 
-    // 将采集的数据输出到用户空间
+    // 发送数据到用户态
     bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
     return 0;
 }
