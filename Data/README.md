@@ -1,22 +1,37 @@
-# big data指标采集
+# eBPF 采集程序记录
 
-## part1主要采集下面的四个指标
+## 概述
 
-1. **RUN INST CMPL**：执行完成的指令数，反映了 CPU 执行指令的速度。
-2. **RUN CYC**：总的运行周期数，用来评估 CPU 的利用率。
-3. **L1 ICACHE MISS**：L1 指令缓存未命中次数，衡量 CPU 对指令缓存的依赖。
-4. **LD MISS L1**：L1 数据缓存的加载未命中次数，衡量数据访问的延迟。
+本项目包含五个 eBPF 采集程序，每个程序通过 perf_event 机制采集特定的 CPU 事件。这些程序的数据由 eBPF 代码在内核态捕获，并通过 perf_event_output 发送到用户态进行分析。
 
-## part2主要采集下面的四个指标
+## 各采集程序的功能
 
-1. **ST MISS L1**：L1 数据缓存的存储未命中次数，反映了缓存写入效率。
-2. **DATA FROM L3**：从 L3 缓存读取数据的次数，用来评估缓存层级间的数据传输效率。
-3. **LLC ST MISS**：最后级缓存（LLC）的存储未命中次数。
-4. **BR MPRED CMPL**：分支预测命中数，用于评估分支预测的效果。
+### first_event
 
-## part3主要采集下面的三个指标
+采集内容：CPU 周期（cpu_cycles）,指令数（instructions）,缓存未命中（cache_misses）,分支指令（branch_instructions）,分支未命中（branch_misses）
 
-1. **IERAT RELOAD**：地址转换缓冲区（IERAT）重新加载次数，影响内存访问的效率。
-2. **LSU DERAT MISS**：加载/存储单元的地址翻译缺失次数，反映内存访问的延迟。
-3. **DATA ALL FROM MEMORY**：从内存中读取所有数据的次数，用来衡量内存访问的总体负载。
+用途：监测 CPU 活动，评估指令执行情况。分析缓存未命中情况，找出热点代码片段。分支预测准确率评估。
 
+### second_event
+
+采集内容：L1 指令缓存未命中（l1_icache_misses）,L1 数据缓存未命中（l1_dcache_misses）
+
+用途：分析 L1 缓存性能，找出访问热点。评估数据局部性，优化数据访问模式。
+
+### third_event
+
+采集内容：L2 缓存未命中（l2_cache_misses）
+
+用途：分析二级缓存的效率，发现缓存优化方向。监测 L2 缓存的占用情况，判断缓存压力。
+
+### forth_event
+
+采集内容：指令 TLB（iTLB）未命中（itlb_misses）
+
+用途：监测指令地址转换的开销。发现页表缺失情况，优化内存管理策略。
+
+### fifth_event
+
+采集内容：数据 TLB（dTLB）未命中（dtlb_misses）
+
+用途：监测数据地址转换的开销。分析内存访问模式，优化 TLB 命中率。
