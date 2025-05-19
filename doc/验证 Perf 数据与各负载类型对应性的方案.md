@@ -110,7 +110,7 @@
 
 - 混合型（`mixed`）则在各项指标上表现居中，特征更为综合。
 
-![image-20250519105106958](/home/superlzx/.config/Typora/typora-user-images/image-20250519105106958.png)
+![image-20250519105106958](/home/superlzx/big-data-small/results/boxplots.png)
 
 ### 2. PCA 2D 可视化
 
@@ -127,7 +127,7 @@ PC2 = -0.1234×CPU_CYCLES - 0.0987×INSTRUCTIONS + … + 0.0256×DTLB_MISSES
 
 - 散点图中 `cpu`、`branch` 等类型在新坐标轴上呈现相对聚集，说明它们在最大方差方向上具有可区分性。
 
-![image-20250519105126328](/home/superlzx/.config/Typora/typora-user-images/image-20250519105126328.png)
+![image-20250519105126328](/home/superlzx/big-data-small/results/pca_scatter.png)
 
 ### 3. 分类结果与混淆矩阵
 
@@ -139,12 +139,10 @@ PC2 = -0.1234×CPU_CYCLES - 0.0987×INSTRUCTIONS + … + 0.0256×DTLB_MISSES
 
 - 大多数负载类型都能被准确识别，部分混合型与上下文切换型存在少量误判。
 
-![image-20250519105139086](/home/superlzx/.config/Typora/typora-user-images/image-20250519105139086.png)
+![image-20250519105139086](/home/superlzx/big-data-small/results/confusion_matrix.png)
 
 ## 结论
 
 - **定性验证**（箱线图、PCA）：不同负载在硬件性能计数上具有显著分布特征，可视化展示了其区分度。
 - **定量验证**（分类效果）：多类分类器在这些特征上表现出较高的准确率，进一步确认了特征与负载类型的对应关系。
-
-> **后续可选**：若需要从无监督角度评估自然聚簇效果，可加入 Silhouette 分数分析；或采用 ANOVA 等统计检验进一步巩固结果。
 
