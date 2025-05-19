@@ -15,7 +15,7 @@
 #include <signal.h>
 
 #define MAX_CPUS 128
-#define SAMPLE_INTERVAL 5
+#define SAMPLE_INTERVAL 1
 
 volatile sig_atomic_t stop = 0;
 
