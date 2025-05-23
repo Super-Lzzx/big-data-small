@@ -24,12 +24,6 @@ int trace_perf_event(struct bpf_perf_event_data *ctx) {
     event.cache_misses = bpf_perf_event_read(&events, 2);
     event.branch_instructions = bpf_perf_event_read(&events, 3);
     event.branch_misses = bpf_perf_event_read(&events, 4);
-    // event.l1_dcache_loads = bpf_perf_event_read(&events, 5);
-    // event.l1_dcache_load_misses = bpf_perf_event_read(&events, 6);
-    // event.l1_icache_loads = bpf_perf_event_read(&events, 7);
-    // event.l1_icache_load_misses = bpf_perf_event_read(&events, 8);
-    // event.dtlb_loads = bpf_perf_event_read(&events, 9);
-    // event.dtlb_load_misses = bpf_perf_event_read(&events, 10);
 
     // Debug 输出
     bpf_printk("CPU %d - Cycles: %llu, Instructions: %llu, Cache Misses: %llu",
