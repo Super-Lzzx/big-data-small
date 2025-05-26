@@ -18,8 +18,23 @@ static void sig_handler(int sig) {
 
 static int handle_event(void *ctx, void *data, size_t data_sz) {
     struct switch_event_t *e = data;
+
+    // 原有打印可保留
     printf("CPU:%2u | %s(%d) --> %s(%d) | ts:%llu\n",
            e->cpu, e->prev_comm, e->prev_pid, e->next_comm, e->next_pid, e->ts);
+
+    // 新增写入CSV文件
+    FILE *fp = fopen("sched.csv", "a");
+    if (fp) {
+        fprintf(fp, "%llu,%u,%s,%d,%s,%d\n",
+            e->ts,
+            e->cpu,
+            e->prev_comm,
+            e->prev_pid,
+            e->next_comm,
+            e->next_pid);
+        fclose(fp);
+    }
     return 0;
 }
 

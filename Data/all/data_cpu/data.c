@@ -13,6 +13,7 @@
 #include <inttypes.h>
 #include <sched.h>
 #include <signal.h>
+#include <time.h>
 
 #define MAX_CPUS 128
 #define SAMPLE_INTERVAL 1
@@ -155,6 +156,13 @@ int main() {
 
     printf("开始采集 %d 个 CPU 的性能事件，每 %d 秒采样一次，Ctrl+C 停止\n", cpu_count, SAMPLE_INTERVAL);
 
+   // 新增：写csv表头（只写一次）
+    FILE *csv_fp = fopen("cpu.csv", "w");
+    if (csv_fp) {
+        fprintf(csv_fp, "time,cpu,cpu_cycles,instructions,cache_misses,branch_instrs,branch_misses,L1_icache_miss,L1_dcache_miss,ITLB_misses,L2_cache_miss,DTLB_misses\n");
+        fclose(csv_fp);
+    }
+
     // 创建各事件组
     for (int cpu = 0; cpu < cpu_count; cpu++) {
         // 硬件组
@@ -239,6 +247,11 @@ int main() {
             ioctl(fds_dtlb[cpu][0], PERF_EVENT_IOC_DISABLE, 0);
         }
 
+        // 获取采样时刻（纳秒）
+        struct timespec tms;
+        clock_gettime(CLOCK_REALTIME, &tms);
+        unsigned long long ns = (unsigned long long)tms.tv_sec * 1000000000ULL + tms.tv_nsec;
+
         // 读取并打印所有事件数据，横向整齐排布
         printf("%-5s", "CPU");
         for (int i = 0; i < 5; i++) printf("%15s", hw_event_names[i]);
@@ -247,6 +260,13 @@ int main() {
         for (int i = 0; i < 1; i++) printf("%15s", l2_event_names[i]);
         for (int i = 0; i < 1; i++) printf("%15s", dtlb_event_names[i]);
         printf("\n");
+
+        // 新增：写入csv文件
+        FILE *csv_fp = fopen("cpu.csv", "a");
+        if (!csv_fp) {
+            perror("打开cpu.csv失败");
+            // 不 return，允许继续采集
+        }
 
         for (int cpu = 0; cpu < cpu_count; cpu++) {
             // 读硬件事件
@@ -314,7 +334,19 @@ int main() {
             printf("%15" PRIu64, values_l2[cpu][0]);
             printf("%15" PRIu64, values_dtlb[cpu][0]);
             printf("\n");
+
+             // 新增：写入一行到csv
+            if (csv_fp) {
+                fprintf(csv_fp, "%llu,%d", ns, cpu);
+                for (int i = 0; i < 5; i++) fprintf(csv_fp, ",%" PRIu64, values_hw[cpu][i]);
+                for (int i = 0; i < 2; i++) fprintf(csv_fp, ",%" PRIu64, values_cache[cpu][i]);
+                fprintf(csv_fp, ",%" PRIu64, values_tlb[cpu][0]);
+                fprintf(csv_fp, ",%" PRIu64, values_l2[cpu][0]);
+                fprintf(csv_fp, ",%" PRIu64, values_dtlb[cpu][0]);
+                fprintf(csv_fp, "\n");
+            }
         }
+        if (csv_fp) fclose(csv_fp);
     }
 
     // 关闭所有文件描述符
