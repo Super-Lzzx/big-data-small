@@ -1,121 +1,166 @@
-# 基于 eBPF 的线程互补性分析方案设计文档
+# 基于 eBPF 的线程互补性分析 & 负载测试综合指南
+
+> 本文档汇总了线程互补性分析的背景与方法，数据采集与归因方案，以及在不同负载类型下进行测试与数据集构建、预测和调度流程。
+
+---
 
 ## 1. 背景与目的
 
-在多核处理器系统中，**线程间的互补性**对于提升系统整体性能、优化调度策略具有重要意义。仅采集调度行为无法量化线程对核心资源的实际消耗，而单独采集核心性能事件又无法定位到具体线程。因此，**结合 CPU 核心性能事件与线程调度事件**，实现线程级别的定量归因，是分析和优化线程互补性的有效方法。
+在多核处理器系统中，**线程间的互补性**对提升整体性能、优化调度策略至关重要。单独采集调度事件或核心性能事件都无法全面反映每个线程的硬件资源消耗，因此需要**结合 CPU 性能事件与 `sched_switch` 调度事件**，实现线程级别的定量归因。
 
-------
+**主要目标**：
 
-## 2. 数据采集方案
+1. 精确归因：将每个采样时刻的 cycles、instructions、cache-misses 等硬件事件，归因到真实运行的线程。
+2. 互补性度量：通过对齐后的数据，计算不同线程在同窗口内的相关/负相关系数，揭示线程在多核环境下的互补行为。
 
-本方案采用 eBPF 工具链，分别采集以下两类数据：
+---
 
-- **（1）CPU核心性能事件数据**：通过 perf_event 机制，定期记录每个 CPU 核心的 cycles、instructions、cache-misses、branch-misses、L1/L2/DTLB/ITLB-misses 等硬件性能事件统计。
-- **（2）线程调度事件数据**：通过跟踪 `sched_switch` 事件，实时记录每个核心上线程的切入与切出时刻，以及对应的 PID/线程名等信息。
+## 2. 数据采集与归因方案
 
-### 数据格式举例
+### 2.1 采集数据类型
 
-#### CPU核心性能数据（简化版）
+* **CPU 核心性能事件**：采集 `cycles`、`instructions`、`cache-misses`、`branch-misses`、L1/L2/ITLB/DTLB-misses。
+* **线程调度事件**：eBPF 跟踪 `sched_switch`，记录 `prev_comm/prev_pid/next_comm/next_pid/cpu/ts`。
 
-| time                | cpu  | cycles   | instructions | ...  |
-| ------------------- | ---- | -------- | ------------ | ---- |
-| 2025-05-16 15:39:39 | 0    | 87008510 | 66730525     | ...  |
+### 2.2 数据格式示例
 
-#### 线程调度事件数据
+* **cpu.csv**
 
-| ts (ns)        | cpu  | prev_comm | prev_pid | next_comm | next_pid |
-| -------------- | ---- | --------- | -------- | --------- | -------- |
-| 27939446819484 | 0    | swapper   | 0        | code      | 4571     |
+  ```csv
+  time,cpu,cpu_cycles,instructions,cache_misses,branch_instrs,branch_misses,L1_icache_miss,L1_dcache_miss,ITLB_misses,L2_cache_miss,DTLB_misses
+  1748337509107368166,0,57865159,62028810,...
+  ```
+* **sched.csv**
 
-## 3. 数据对齐与归因分析方法
+  ```csv
+  ts,cpu,prev_comm,prev_pid,next_comm,next_pid
+  7152822800591,3,kworker/u32:4,18802,swapper/3,0
+  ```
 
-### 3.1 对齐原理
+### 2.3 对齐与归因
 
-- **窗口归因法**：以CPU性能事件采样时刻为基准窗口，将窗口内活跃的线程与性能计数对应。
-- **最近调度法**：每条CPU性能数据，归因给同一CPU核上最近一次发生的 `sched_switch` 事件中的活跃线程。
-- **比例归因法（可选，精细化分析）**：统计一个采样窗口内各线程实际运行时间的占比，将该窗口的性能指标按比例分配给不同线程。
+* **最近调度法**：为每条 `cpu.csv` 条目，找到同 `cpu` 上最近的 `sched.csv` 事件，将硬件事件归因到该线程。
+* **脚本**：使用 `scripts/align_thread.py` 完成 `data/raw/→data/processed/` 归因。
 
-### 3.2 示例代码片段
+---
 
-```python
-import pandas as pd
+## 3. 典型负载测试场景
 
-cpu_df = pd.read_csv('cpu.csv', sep='\s+', header=None, names=[
-    'time', 'cpu', 'cycles', 'instructions', 'event3', 'event4', 'event5', 'event6', 'event7', 'event8', 'event9', 'event10', 'role', 'flag'
-])
-sched_df = pd.read_csv('sched.csv')  # ts, cpu, prev_comm, prev_pid, next_comm, next_pid
+### 3.1 CPU 计算型
 
-# 转为纳秒时间戳
-cpu_df['ts'] = pd.to_datetime(cpu_df['time']).astype('int64')
-
-def find_last_thread(row):
-    ts = row['ts']
-    cpu = row['cpu']
-    match = sched_df[(sched_df['cpu']==cpu) & (sched_df['ts']<=ts)]
-    if match.empty:
-        return pd.Series({'thread': None, 'pid': None})
-    last = match.iloc[-1]
-    return pd.Series({'thread': last['next_comm'], 'pid': last['next_pid']})
-
-cpu_df[['thread', 'pid']] = cpu_df.apply(find_last_thread, axis=1)
-cpu_df.to_csv('cpu_thread_attributed.csv', index=False)
-
+```bash
+stress-ng --cpu 8 --cpu-method matrixprod --timeout 300s
+sysbench --test=cpu --cpu-max-prime=20000 --num-threads=8 --time=300 run
 ```
 
-## 4. 为什么不只用调度事件进行分析？
+### 3.2 磁盘 I/O 型
 
-- **调度事件（sched_switch）仅能反映线程的切换行为**，但无法直接获得每个线程在调度期间消耗的 cycles、指令数、cache misses 等关键性能数据。
-- **CPU核心性能数据能定量反映资源消耗**，但无法直接映射到具体线程。
-- 只有将**调度事件与性能事件结合**，才能**准确评估每个线程在各核上的真实硬件利用率**，进而挖掘和解释线程间的互补关系、性能瓶颈与调度优化空间。
+```bash
+stress-ng --hdd 4 --hdd-bytes 2G --timeout 300s
+fio --name=randrw --ioengine=libaio --direct=1 \
+    --rw=randrw --rwmixread=70 --bs=4k --size=1G \
+    --numjobs=4 --runtime=300 --time_based
+```
 
-------
+### 3.3 内存访问型
 
-## 5. 方法优势总结
+```bash
+stress-ng --vm 4 --vm-bytes 1G --vm-method memcpy --timeout 300s
+sudo memtester 4G 5
+```
 
-- **精确归因**：实现线程-核心-性能三者一一对应，支持定量分析各线程对系统瓶颈的贡献。
-- **细粒度分析**：支持窗口/时间片级别的互补性度量，适用于 SMT/NUMA 等复杂多核系统。
-- **可扩展性强**：可灵活拓展支持更多 eBPF 性能事件或自定义线程调度行为分析。
-- **论文应用价值**：方法学清晰、实验数据解释性强、便于支持实际调度优化与多线程算法评估。
+### 3.4 网络 I/O 型（可选）
 
+```bash
+iperf3 -s &
+iperf3 -c localhost -P4 -t300
+```
 
+### 3.5 混合生产型 (Nginx + 计算)
 
-# 线程-CPU事件归因与负载类型数据集构建说明
+```bash
+sudo systemctl start nginx
+ab -n100000 -c100 http://localhost/ &
+sysbench --test=cpu --cpu-max-prime=20000 --num-threads=4 --time=300 run &
+```
 
-## 1. 背景
+---
 
-在多核处理器上分析线程互补性和调度优化问题时，**单一维度的数据（仅采集CPU事件或仅采集调度事件）难以全面反映线程实际运行特性和资源竞争行为**。为此，我们采用**CPU核心性能事件+线程调度事件联合采集**，以实现对线程运行时资源占用的准确归因，并据此开展不同负载下的性能归因和线程互补性分析。
+## 4. 自动化脚本集成
 
-------
+在 `scripts/collect_and_align.py` 定义：
 
-## 2. 数据采集方案
+```python
+workloads = {
+  "cpu":       ["stress-ng --cpu 8 ..."],
+  "io":        ["stress-ng --hdd 4 ..."],
+  "mem":       ["stress-ng --vm 4 ..."],
+  "net":       ["iperf3 -s","iperf3 -c localhost -P4 -t300"],
+  "prod_mixed":["ab -n100000 ...","sysbench ..."]
+}
+```
 
-### 2.1 采集内容
+**执行**：
 
-- **CPU核心事件采集**（如 cycles、instructions、cache-misses、l1d/l1i/l2/llc/itlb/dtlb-misses 等），反映每个核在每一时刻的底层资源使用情况。
-- **线程调度事件采集**（如 sched_switch），记录每个CPU核心在每一时刻正在运行的线程（PID/TID）以及调度切换行为。
+```bash
+cd scripts && sudo python3 collect_and_align.py
+```
 
-### 2.2 对齐与归因方法
+---
 
-- **最近调度法**：对于每一条 CPU 核心性能事件采样，查找该时刻最近（或小于等于该时刻）的调度切换，认为此时该线程实际在该CPU上运行。将该性能数据归因到该线程。
-- **优势**：归因粒度细、误差小、可支撑线程互补性与调度行为分析。
+## 5. 构建数据集
 
-------
+### 5.1 数据标签与特征
 
-## 3. 数据集构建方法
+* 每条记录必须包含：
 
-### 3.1 负载类型设计
+  ```text
+  [sec, cpu, cpu_cycles, instructions, cache_misses, ..., DTLB_misses, thread, pid, LoadType, Rep]
+  ```
+* **LoadType**：场景名称（cpu/io/mem/net/prod\_mixed）。
+* **Rep**：重复实验序号。
 
-- **单线程计算型**：单一高计算压力线程，分析CPU占用与cache竞争。
-- **多线程吞吐型**：多线程大吞吐场景（如web server、数据库），考察多线程调度切换与互补性。
-- **混合负载型**：计算+I/O混合型，评估调度公平性与资源复用。
-- **实际应用负载**：如 nginx、memcached、AI推理等真实业务。
+### 5.2 数据清洗与合并
 
-### 3.2 数据集标签与特征
+1. 合并所有场景 `data/processed/*.csv` 到一个 DataFrame，并加入 `LoadType`、`Rep` 列。
+2. 按 `sec, thread` 聚合 `cpu_cycles`、`instructions` 等性能指标。
+3. 填充缺失值并进行归一化或标准化。
 
-- 每一组数据应包含**时间戳、CPU核心编号、线程ID、进程名、调度信息、各项性能事件值、负载类型标签**。
-- 支持后续多种机器学习、数据挖掘分析。
+### 5.3 保存最终数据集
 
-### 3.3 数据归因与对齐
+* 推荐使用 Pandas 将合并后的 DataFrame 导出为 `data/dataset/full_dataset.csv`。
 
-- 采用上述最近调度归因法，实现**线程-性能事件一体化数据表**。
-- 对不同时刻、不同CPU、不同线程进行“切片”，形成结构化样本，便于训练/分析。
+---
+
+## 6. 预测与调度策略
+
+### 6.1 预测模型训练
+
+* **任务**：通过机器学习模型（如逻辑回归、随机森林、神经网络）预测在不同场景下哪对线程具有最高互补度。
+* **特征**：线程聚合的 `cpu_cycles`, `cache_misses`, 相关系数矩阵特征（主成分得分、互补度指标等）。
+* **标签**：手动或阈值判断得到的“高互补”与“低互补”二分类。
+
+```python
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+X = df[feature_cols]
+y = df['label']  # 1=高互补
+X_train, X_test, y_train, y_test = train_test_split(X, y, ...)
+clf = RandomForestClassifier().fit(X_train, y_train)
+```
+
+### 6.2 调度优化建议
+
+* 根据预测结果，为调度器提供规则：
+
+  * **互补线程配对**：将预测为高互补的线程安排在不同核心，以最大化利用率。
+  * **负载平衡**：对预测为低互补或冲突的线程，避免同时调度在相邻核或共享缓存核上。
+
+### 6.3 实验验证
+
+1. 部署修改后的调度策略或 SCHED\_DEADLINE、CFS 调度器插件。
+2. 在相同负载下采集对比数据，评估系统吞吐和延迟改进。
+
+---
+
+> **总结**：本指南涵盖了从数据采集、归因、测试场景到数据集构建、预测模型和调度优化全流程，为深入研究线程互补性提供了完整框架。

@@ -21,7 +21,7 @@ zh_font = FontProperties(fname="/usr/share/fonts/truetype/arphic/ukai.ttc", size
 
 # 2. 项目根目录 & 数据文件
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
-csv_path = PROJECT_ROOT / "Data" / "all" / "monitor" / "performance_data.csv"
+csv_path    = PROJECT_ROOT / "data" / "monitor" / "performance_data.csv"
 print(f"正在加载数据：{csv_path}")
 
 df = pd.read_csv(

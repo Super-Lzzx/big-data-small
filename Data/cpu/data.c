@@ -249,7 +249,7 @@ int main() {
 
         // 获取采样时刻（纳秒）
         struct timespec tms;
-        clock_gettime(CLOCK_REALTIME, &tms);
+        clock_gettime(CLOCK_MONOTONIC, &tms);
         unsigned long long ns = (unsigned long long)tms.tv_sec * 1000000000ULL + tms.tv_nsec;
 
         // 读取并打印所有事件数据，横向整齐排布

@@ -40,9 +40,20 @@ static int handle_event(void *ctx, void *data, size_t data_sz) {
 
 int main()
 {
+    // 检查 sched.csv 是否存在，不存在则写表头
+    FILE *fp = fopen("sched.csv", "r");
+    if (!fp) { // 文件不存在，写表头
+        fp = fopen("sched.csv", "w");
+        if (fp) {
+            fprintf(fp, "ts,cpu,prev_comm,prev_pid,next_comm,next_pid\n");
+            fclose(fp);
+        }
+    } else {
+        fclose(fp); // 文件已存在
+    }
+
     struct rlimit r = {RLIM_INFINITY, RLIM_INFINITY};
     setrlimit(RLIMIT_MEMLOCK, &r);
-
     struct data_thread_bpf *skel = data_thread_bpf__open_and_load();
     if (!skel) {
         fprintf(stderr, "Failed to open/load skeleton\n");

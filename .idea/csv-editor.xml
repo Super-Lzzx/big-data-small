@@ -10,6 +10,20 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/analysis/cpu_thread_attributed.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/cpu_thread_attributed.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
       </map>
     </option>
   </component>
