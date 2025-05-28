@@ -3,21 +3,7 @@
   <component name="CsvFileAttributes">
     <option name="attributeMap">
       <map>
-        <entry key="/Data/all/monitor/performance_data.csv">
-          <value>
-            <Attribute>
-              <option name="separator" value=":" />
-            </Attribute>
-          </value>
-        </entry>
-        <entry key="/analysis/cpu_thread_attributed.csv">
-          <value>
-            <Attribute>
-              <option name="separator" value="," />
-            </Attribute>
-          </value>
-        </entry>
-        <entry key="/cpu_thread_attributed.csv">
+        <entry key="/results/eda/stats_summary.csv">
           <value>
             <Attribute>
               <option name="separator" value="," />
