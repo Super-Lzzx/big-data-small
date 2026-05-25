@@ -1,3 +1,39 @@
-# 忽略所有 CSV 和 TXT 文件
+# Python caches
+__pycache__/
+*.py[cod]
+
+# IDE/editor state
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# eBPF/libbpf build output
+**/.output/
+*.o
+*.d
+*.a
+*.so
+*.skel.h
+
+# Local executables built from the collectors/schedulers
+Data/cpu/data
+Data/thread/data_thread
+sched_ext/magm_scx
+
+# Experiment data, generated reports, and trained models
+data/
+stress-results/
+results/
+demo_results/
+demo_results_named/
+demo_results_pretty/
+models/
+
+# Generated tabular outputs
 *.csv
-*.txt
+
+# Logs and temporary files
+*.log
+tmp/
+*.tmp

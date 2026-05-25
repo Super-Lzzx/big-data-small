@@ -4,6 +4,7 @@
 merge_results.py — 合并 stress-results 下所有场景的 attr.csv，生成 data/processed/full_dataset.csv
 并额外生成对齐格式的全文本表格 data/processed/full_dataset_aligned.txt
 """
+import os
 import pandas as pd
 from pathlib import Path
 
@@ -16,7 +17,12 @@ SR_DIR = PROJECT_ROOT / 'stress-results'
 if not SR_DIR.exists():
     print(f'错误：未找到目录 {SR_DIR}，请确保在项目根目录下存在 stress-results。')
     exit(1)
-scenes = [p.name for p in SR_DIR.iterdir() if p.is_dir()]
+requested = os.environ.get("MERGE_SCENES", "").strip()
+if requested:
+    allowed = {x.strip() for x in requested.split(",") if x.strip()}
+    scenes = [p.name for p in SR_DIR.iterdir() if p.is_dir() and p.name in allowed]
+else:
+    scenes = [p.name for p in SR_DIR.iterdir() if p.is_dir()]
 if not scenes:
     print('警告：stress-results 下没有子目录场景。')
     exit(1)

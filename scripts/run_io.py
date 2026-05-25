@@ -25,7 +25,8 @@ workloads = {
             --numjobs=4 --runtime=300 --time_based"
     ]
 }
-collect_seconds = 300  # 采集时长（秒）
+collect_seconds = int(os.environ.get("COLLECT_SECONDS", "300"))  # 采集时长（秒）
+warmup_seconds = int(os.environ.get("WARMUP_SECONDS", "5"))      # 负载预热时长（秒）
 
 for name, cmds in workloads.items():
     print(f"\n=== 场景：{name} ===")
@@ -43,7 +44,7 @@ for name, cmds in workloads.items():
         p = subprocess.Popen(cmd, cwd=PROJECT_ROOT, shell=True,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         io_procs.append(p)
-    time.sleep(5)  # 等待负载稳定
+    time.sleep(warmup_seconds)  # 等待负载稳定
 
     # 3. 启动 eBPF 采集：线程调度 & CPU 事件
     sched_bin = PROJECT_ROOT / "Data" / "thread" / "data_thread"

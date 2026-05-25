@@ -17,7 +17,8 @@ workloads = {
         "stress-ng --cpu 8 --cpu-method matrixprod --timeout 300s"
     ]
 }
-collect_seconds = 300  # 采集时长（秒）
+collect_seconds = int(os.environ.get("COLLECT_SECONDS", "300"))  # 采集时长（秒）
+warmup_seconds = int(os.environ.get("WARMUP_SECONDS", "5"))      # 负载预热时长（秒）
 
 for name, cmds in workloads.items():
     print(f"\n=== 场景：{name} ===")
@@ -33,7 +34,7 @@ for name, cmds in workloads.items():
     for cmd in cmds:
         p = subprocess.Popen(cmd.split(), cwd=PROJECT_ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         procs.append(p)
-    time.sleep(5)  # 等待负载稳定
+    time.sleep(warmup_seconds)  # 等待负载稳定
 
     # 3. 启动采集
     sched_bin = PROJECT_ROOT / "Data" / "thread" / "data_thread"

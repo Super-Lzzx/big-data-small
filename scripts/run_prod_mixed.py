@@ -25,7 +25,8 @@ workloads = {
         "timeout 300s sysbench --test=cpu --cpu-max-prime=20000 --num-threads=4 --time=300 run"
     ]
 }
-collect_seconds = 300  # 采集时长（秒）
+collect_seconds = int(os.environ.get("COLLECT_SECONDS", "300"))  # 采集时长（秒）
+warmup_seconds = int(os.environ.get("WARMUP_SECONDS", "5"))      # 负载预热时长（秒）
 
 # 统一停止子进程的工具函数
 def stop_process(proc, label, timeout=10):
@@ -63,7 +64,7 @@ for name, cmds in workloads.items():
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                  preexec_fn=os.setsid)
             procs.append((p, cmd))
-    time.sleep(5)  # 等待负载稳定
+    time.sleep(warmup_seconds)  # 等待负载稳定
 
     # 启动 eBPF 采集：线程调度 & CPU 事件
     sched_bin = PROJECT_ROOT / "Data" / "thread" / "data_thread"
